@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestão de Banco de Horas e Compensações</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --blue:#1551A7; --blue-soft:#E3ECF8; --amber:#B4601A; --amber-soft:#F7E9DC;
+  --graphite:#54585B; --ink:#18212C; --muted:#6B7178; --line:#DCE0E5;
+  --bg:#F3F5F8; --panel:#FFFFFF; --zero:#9AA0A6;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --blue:#6FA0EA; --blue-soft:#1B2B44; --amber:#E0954F; --amber-soft:#3A2A1C;
+    --graphite:#A9AEB3; --ink:#E8EBEF; --muted:#9BA2AA; --line:#2E3540;
+    --bg:#12161C; --panel:#1A2029; --zero:#6B7178;
+  }
+}
+:root[data-theme="dark"]{
+  --blue:#6FA0EA; --blue-soft:#1B2B44; --amber:#E0954F; --amber-soft:#3A2A1C;
+  --graphite:#A9AEB3; --ink:#E8EBEF; --muted:#9BA2AA; --line:#2E3540;
+  --bg:#12161C; --panel:#1A2029; --zero:#6B7178;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45}
+.num{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;border-bottom:3px solid var(--blue);padding-bottom:14px}
+h1{margin:0;font-size:1.75rem;font-weight:700;letter-spacing:-.01em}
+.brand{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.logo{height:52px;width:auto;display:block}
+.logo-plate{display:inline-flex;border-radius:8px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .logo-plate{background:#fff;padding:6px 10px}}
+:root[data-theme="dark"] .logo-plate{background:#fff;padding:6px 10px}
+.brand h1{border-left:1px solid var(--line);padding-left:20px}
+.edit-badge{display:none;font-size:.8rem;font-weight:600;color:var(--amber);border:1px solid var(--amber);border-radius:999px;padding:2px 10px;margin-left:6px;vertical-align:middle}
+body.edit .edit-badge{display:inline-block}
+.edit-only{display:none!important}
+body.edit .edit-only{display:inline-block!important}
+body.edit details.edit-only{display:block!important}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--blue)}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+/* supervisores */
+.sup-title{margin:22px 0 8px;font-weight:600;color:var(--graphite)}
+.sups{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+.sup{flex:0 0 auto;text-align:left;border-radius:8px;padding:8px 12px;min-width:150px}
+.sup .n{display:block;font-weight:600;white-space:nowrap}
+.sup .c{display:block;font-size:.82rem;color:var(--muted);white-space:nowrap}
+.sup[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.sup[aria-pressed="true"] .c{color:inherit;opacity:.75}
+
+/* balança resumo */
+.scale{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.scale h2{margin:0 0 12px;font-size:1.15rem}
+.sides{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch}
+.side{border:0;background:none;padding:0;text-align:left;border-radius:8px;cursor:pointer}
+.side.work{text-align:right}
+.side .big{font-size:2.6rem;font-weight:700;line-height:1}
+.side .lbl{font-weight:600}
+.side .det{color:var(--muted);font-size:.9rem}
+.side.work .big,.side.work .lbl{color:var(--amber)}
+.side.off .big,.side.off .lbl{color:var(--blue)}
+.side[aria-pressed="true"]{outline:2px solid currentColor;outline-offset:6px}
+.mid{border-left:1px solid var(--line);border-right:1px solid var(--line);padding:0 18px;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.mid .big{font-size:1.9rem;font-weight:700;color:var(--graphite);line-height:1}
+.mid .det{font-size:.85rem;color:var(--muted);max-width:150px}
+.beam{position:relative;height:14px;margin-top:16px;display:flex}
+.beam .l,.beam .r{flex:1;display:flex}
+.beam .l{justify-content:flex-end;border-right:2px solid var(--ink)}
+.beam .l span{background:var(--amber);border-radius:7px 0 0 7px}
+.beam .r span{background:var(--blue);border-radius:0 7px 7px 0}
+.beam-legend{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted);margin-top:4px}
+
+/* filtros */
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 10px;align-items:center}
+.filters input,.filters select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.filters input{flex:1 1 220px}
+.count{color:var(--muted);font-size:.9rem;margin-left:auto}
+
+/* tabela */
+.tbl-wrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:880px}
+th{text-align:left;font-weight:600;font-size:.85rem;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td .name{font-weight:600}
+td .role{font-size:.82rem;color:var(--muted)}
+td.r,th.r{text-align:right}
+.saldo{font-size:1.2rem;font-weight:600}
+.pos{color:var(--blue)} .neg{color:var(--amber)} .zer{color:var(--zero)}
+.bar{position:relative;width:160px;height:10px;display:flex}
+.bar .l,.bar .r{flex:1;display:flex}
+.bar .l{justify-content:flex-end;border-right:1px solid var(--graphite)}
+.bar .l span{background:var(--amber);border-radius:5px 0 0 5px}
+.bar .r span{background:var(--blue);border-radius:0 5px 5px 0}
+.tag{display:inline-block;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.tag.off{background:var(--blue-soft);color:var(--blue)}
+.tag.work{background:var(--amber-soft);color:var(--amber)}
+.tag.hrs{background:transparent;border:1px dashed var(--line);color:var(--graphite)}
+.tag.ok{background:transparent;color:var(--zero)}
+.hint{display:block;font-size:.8rem;color:var(--muted);margin-top:2px}
+.esc{font-size:.85rem}
+.esc small{display:block;color:var(--muted)}
+.decision{display:none}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+
+/* regras */
+details.rules{margin-top:22px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px}
+details.rules summary{cursor:pointer;font-weight:600}
+#jgrid{margin-top:12px}
+.jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.jitem{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.jitem label{display:block;font-weight:600}
+.jitem .ex{font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px}
+.jitem input{font:inherit;width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.jitem.premise{border-color:var(--amber)}
+.jitem.premise .flag{color:var(--amber);font-size:.78rem;font-weight:600}
+.print-head{display:none}
+
+@media (max-width:760px){
+  h1{font-size:1.4rem}
+  .sides{grid-template-columns:1fr 1fr}
+  .mid{grid-column:1 / -1;order:3;align-items:center;border:0;border-top:1px solid var(--line);padding:12px 0 0}
+  .side.work{text-align:left}
+  .side .big{font-size:2.1rem}
+  .tbl-wrap{background:none;border:0;overflow:visible}
+  table{min-width:0}
+  thead{display:none}
+  tr{display:grid;grid-template-columns:1fr auto;gap:6px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+  td{border:0;padding:0}
+  td.c-name{grid-column:1 / -1}
+  td.c-esc{grid-column:1 / 2}
+  td.c-saldo{grid-column:2 / 3;grid-row:2}
+  td.c-dias{grid-column:1 / 2}
+  td.c-bar{display:none}
+  td.c-acao{grid-column:1 / -1}
+  td.r{text-align:left}
+  td.c-saldo{text-align:right}
+}
+@media print{
+  :root{--bg:#fff;--panel:#fff}
+  body{font-size:11px}
+  .actions,.sups,.sup-title,.filters,details.rules,.no-print{display:none!important}
+  .print-head{display:block;margin:10px 0}
+  .wrap{padding:0;max-width:none}
+  .scale{padding:10px 12px;break-inside:avoid}
+  .side .big{font-size:1.8rem}
+  table{min-width:0}
+  .bar{width:90px}
+  .decision{display:table-cell;width:22%;border-left:1px solid var(--line)}
+  tr{break-inside:avoid}
+  .sign{display:flex!important}
+}
+.sign{display:none;gap:40px;margin-top:40px}
+.sign div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:.85rem;text-align:center}
+@media (prefers-reduced-motion:no-preference){.beam span,.bar span{transition:width .35s ease}}
+</style>
+</head>
+<body class="">
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="logo-plate"><img class="logo" src="data:image/png;base64,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" alt="Cardozo Engenharia Elétrica e Montagem Mecânica"></span>
+      <h1>Gestão de Banco de Horas e Compensações<span class="edit-badge">Modo de edição</span></h1>
+    </div>
+    <div class="actions">
+      <button type="button" class="edit-only" id="btnBase">Atualizar base (.xlsx)</button>
+      <button type="button" class="edit-only" id="btnHtml">Baixar HTML atualizado</button>
+      <input type="file" id="fileIn" accept=".xlsx,.xls" hidden="">
+      <button type="button" class="primary" id="btnPrint">Gerar PDF para reunião</button>
+    </div>
+  </header>
+
+  <div class="sup-title">Supervisor</div>
+  <div class="sups" id="sups" role="group" aria-label="Filtrar por supervisor"></div>
+
+  <div class="print-head"><strong>Supervisor:</strong> <span id="printSup"></span> &nbsp; | &nbsp; <strong>Data da reunião:</strong> ____/____/______</div>
+
+  <section class="scale" aria-live="polite">
+    <h2 id="scaleTitle">Toda a equipe</h2>
+    <div class="sides">
+      <button type="button" class="side work" data-sit="work" aria-pressed="false">
+        <div class="big num" id="wDays">0</div>
+        <div class="lbl">dias a trabalhar</div>
+        <div class="det" id="wDet"></div>
+      </button>
+      <div class="mid">
+        <div class="big num" id="mCount">0</div>
+        <div class="det" id="mDet">com menos de um dia de saldo ou em dia</div>
+      </div>
+      <button type="button" class="side off" data-sit="off" aria-pressed="false">
+        <div class="big num" id="oDays">0</div>
+        <div class="lbl">dias a folgar</div>
+        <div class="det" id="oDet"></div>
+      </button>
+    </div>
+    <div class="beam"><div class="l"><span id="bL"></span></div><div class="r"><span id="bR"></span></div></div>
+    <div class="beam-legend"><span>Saldo negativo: precisa trabalhar</span><span>Saldo positivo: precisa folgar</span></div>
+  </section>
+
+  <div class="filters">
+    <input type="search" id="q" placeholder="Buscar colaborador ou cargo" aria-label="Buscar colaborador ou cargo">
+    <select id="fEsc" aria-label="Escala"><option value="">Todas as escalas</option></select>
+    <select id="fSit" aria-label="Situação">
+      <option value="">Todas as situações</option>
+      <option value="work">Trabalhar (dias)</option>
+      <option value="off">Folgar (dias)</option>
+      <option value="hneg">Devendo menos de um dia</option>
+      <option value="hpos">Crédito de menos de um dia</option>
+      <option value="ok">Em dia</option>
+    </select>
+    <select id="fSort" aria-label="Ordenar">
+      <option value="neg">Mais negativos primeiro</option>
+      <option value="pos">Mais positivos primeiro</option>
+      <option value="name">Nome (A–Z)</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Colaborador</th><th>Escala</th><th class="r">Saldo (h)</th><th class="r">Equivale a</th><th>Balança</th><th>Tratativa sugerida</th><th class="decision">Definição do supervisor (datas)</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+
+  <div class="sign"><div>Supervisor</div><div>Planejamento / Processos</div></div>
+
+  <details class="rules no-print edit-only">
+    <summary>Regras de conversão (quanto vale um dia em cada escala)</summary>
+    <div class="jgrid" id="jgrid"></div>
+  </details>
+</div>
+
+<script type="application/json" id="base-data">[{"id":"89","nome":"ADENILTON DIAS MELO","sup":"GABRIEL DE SOUZA BRAGA","cargo":"TÉCNICO ELETRICISTA I","hor":"ADM Subsolo-  07:10 AS 15:12 (LAMEGO)","emp":"ENGENHARIA","saldo":"-02:02"},{"id":"349","nome":"ADRIAN GABRIEL DE OLIVEIRA MULLER","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"09:41"},{"id":"380","nome":"AIRTON CESAR MARQUES AUGUSTO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"12:17"},{"id":"236","nome":"ALDIVAN MENDES BARBOSA","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR II","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"19:17"},{"id":"352","nome":"ALEXANDRE CLAUDIO GOMES VITORIANO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-22:51"},{"id":"392","nome":"ALEXANDRE REIS SIMOES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-08:43"},{"id":"278","nome":"ALINE CASSIO DE OLIVEIRA","sup":"VICTOR FERNANDO CARDOZO","cargo":"ANALISTA DE PROCESSOS DE ENGENHARIA PLENO","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-27:23"},{"id":"66","nome":"ANA CAROLINE FERREIRA QUEIROZ","sup":"MARCELO AUGUSTO CARDOZO","cargo":"ASSISTENTE ADM III","hor":"ADM 07:00 AS 17:00","emp":"HOLDING","saldo":"-01:47"},{"id":"226","nome":"ANA PAULA FERREIRA","sup":"JUAREZ SILVA FERREIRA","cargo":"TÉC SEGURANÇA DO TRABALHO III","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"52:48"},{"id":"368","nome":"ANDERSON ALESSANDER CAMPONEZ","sup":"FERNANDO ANTONIO CARDOZO","cargo":"ALMOXARIFE II","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"13:35"},{"id":"101","nome":"ANDERSON APARECIDO SOUZA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ENCARREGADO DE INFRAESTRUTURA","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"09:54"},{"id":"398","nome":"ANDERSON DA PIEDADE PINTO RAMOS","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR II","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-00:05"},{"id":"381","nome":"ANDRE MARCOS MAGALHAES DOS SANTOS","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:01"},{"id":"68","nome":"ANDREA GOMES GALINDO LIMA","sup":"LUANA LARISSA DE OLIVEIRA CARDOZO","cargo":"ANALISTA DE RECURSOS HUMANOS PLENO","hor":"ADM 07:00 AS 17:00","emp":"HOLDING","saldo":"40:27"},{"id":"394","nome":"ANGELO BRUNO DOS SANTOS","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"OPER MAQUINAS E EQUIPAMENTOS I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"00:00"},{"id":"328","nome":"ANTHONY OMAR VERA ESCALANTE","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-10:48"},{"id":"61","nome":"ANTONIO MARCOS LUZ","sup":"FERNANDO ANTONIO CARDOZO","cargo":"MECANICO INDUSTRIAL III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-22:29"},{"id":"348","nome":"ARLEY DO CARMO SANTOS","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-00:51"},{"id":"127","nome":"ARTHUR CAPTEIN DIAS","sup":"FERNANDO ANTONIO CARDOZO","cargo":"MECANICO III","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"42:58"},{"id":"343","nome":"ARTHUR FELIX LIMA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"17:59"},{"id":"377","nome":"AUGUSTO HENRIQUE GERVASIO FRANCO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-25:16"},{"id":"25","nome":"BARBARA GOMES DA CUNHA","sup":"VICTOR FERNANDO CARDOZO","cargo":"ANALISTA DE PROCESSOS DE ENGENHARIA PLENO","hor":"ADM 07:00 AS 17:00","emp":"ENGENHARIA","saldo":"07:34"},{"id":"409","nome":"BERNARDO DE SENA COSTA JUNIOR","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ENCARREGADO DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"02:27"},{"id":"52","nome":"BRAYAN HENRIQUE SILVA DIAS","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"16:27"},{"id":"404","nome":"BRENO COSTA RIBEIRO","sup":"GABRIEL DE SOUZA BRAGA","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 -EQ 2 (LAMEGO T1)","emp":"ENGENHARIA","saldo":"-00:13"},{"id":"313","nome":"BRENO FERREIRA ABEL","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"00:28"},{"id":"91","nome":"BRUNO DE SOUZA COTA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA III","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-31:34"},{"id":"360","nome":"CAIO VIANA LIMA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"00:28"},{"id":"283","nome":"CAIQUE PHELYPE JANUARIO","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA II","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-21:52"},{"id":"419","nome":"CARLOS ALBERTO PEREIRA JUNIOR","sup":"JUAREZ SILVA FERREIRA","cargo":"TÉC SEGURANÇA DO TRABALHO III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"07:15"},{"id":"170","nome":"CARLOS ANTONIO DO NASCIMENTO JUNIOR","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO II","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-06:46"},{"id":"388","nome":"CARLOS DANIEL FERNANDES SOUZA ROCHA","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-00:01"},{"id":"364","nome":"CARLOS EDUARDO DA SILVA ARAUJO","sup":"GABRIEL DE SOUZA BRAGA","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 -EQ 2 (LAMEGO T1)","emp":"ENGENHARIA","saldo":"-07:39"},{"id":"425","nome":"CARLOS EDUARDO ROCHA PINTO","sup":"VICTOR FERNANDO CARDOZO","cargo":"AUXILIAR DE LIMPEZA INDUSTRIAL I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"01:10"},{"id":"438","nome":"CAUÃ PHILLIPE ALMEIDA VIANA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-00:13"},{"id":"195","nome":"CELIA APARECIDA CUSTODIO","sup":"FERNANDO ANTONIO CARDOZO","cargo":"AUXILIAR DE SERVIÇOS GERIAS II","hor":"ADM - SERVIÇOS GERAIS 06:30 - 15:30","emp":"HOLDING","saldo":"152:22"},{"id":"329","nome":"CHARLES SANTOS DA SILVA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-42:13"},{"id":"11","nome":"CLAUDIANO OLIVEIRA MOREIRA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"SOLDADO MONTADOR IV","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-05:49"},{"id":"116","nome":"CLEBER SOARES AFONSO","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENOS III","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-33:10"},{"id":"430","nome":"CRISTIANO SILVA","sup":"","cargo":"CONSULTOR COMERCIAL DE SOLUÇÕES ELÉTRICAS","hor":"HORARIO CRISTIANO LOJA","emp":"LOJA","saldo":"-02:45"},{"id":"309","nome":"DANIEL GONÇALVES VIMIEIRO","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ENCARREGADO DE PLANEJAMENTO DE AUTOMAÇÃO","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"11:06"},{"id":"395","nome":"DANIELLE APARECIDA RODRIGUES DE AQUINO","sup":"JUAREZ SILVA FERREIRA","cargo":"ANALISTA DE SEGURANÇA DO TRABALHO","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"08:15"},{"id":"363","nome":"DARIO JOSE DOS SANTOS JUNIOR","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-02:21"},{"id":"258","nome":"DEIVISSON  MARCKS DE JESUS GOMES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-05:38"},{"id":"227","nome":"DEIVY MARCOS DOS REIS SANTOS","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENOS III","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"10:09"},{"id":"251","nome":"DENIS RAFAEL BRANDAO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"TÉCNICO ELETRICISTA III","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"25:53"},{"id":"267","nome":"DIEGO REGIS GONÇALVES","sup":"FERNANDO ANTONIO CARDOZO","cargo":"AUXILIAR DE LIMPEZA INDUSTRIAL","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-00:14"},{"id":"27","nome":"DIOGO DA MOTA SOARES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO II","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-16:20"},{"id":"247","nome":"DOMINGOS JOSE OLIVEIRA DA SILVA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"SOLDADOR MONTADOR II","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"00:03"},{"id":"417","nome":"DOUGLAS PATRICK SILVA BATISTA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-12:04"},{"id":"87","nome":"EDER BERNADINO CUSTODIO","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENOS III","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-00:12"},{"id":"254","nome":"EDNEI ALVES DE LIMA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"TÉCNICO ELETRICISTA III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-25:30"},{"id":"202","nome":"ERNANE FERREIRA PEREIRA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-33:10"},{"id":"303","nome":"ESTER APARECIDA FERREIRA JEAMONOD","sup":"SANDRA MARIA SOUZA JULIO","cargo":"OPERADORA DE CAIXA","hor":"LOJA - 08:00 as 18:00","emp":"LOJA","saldo":"61:41"},{"id":"408","nome":"FABIANO JOSE GOMES","sup":"VICTOR FERNANDO CARDOZO","cargo":"SUPERVISOR DE INFRAESTRUTURA II","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"24:08"},{"id":"305","nome":"FABRICIO DE PAULA RESENDE","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-03:11"},{"id":"407","nome":"FERNANDO DOS SANTOS CUSTODIO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"00:00"},{"id":"46","nome":"FRANCISCO DOMINGOS COSTA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"TÉCNICO ELETRICISTA I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-43:08"},{"id":"357","nome":"FREDERICO DE ARAUJO EUGENIO","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-40:17"},{"id":"420","nome":"GABRIEL AUGUSTO DIVINO TORRES DA SILVA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"OPERADOR DE EQUIPAMENTOS LEVES II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-10:55"},{"id":"57","nome":"GABRIEL DE SOUZA BRAGA","sup":"VICTOR FERNANDO CARDOZO","cargo":"ENCARREGADO ELETRICA","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"26:50"},{"id":"214","nome":"GABRIEL DO CARMO TEIXEIRA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"18:52"},{"id":"201","nome":"GABRIEL SANTIAGO ALVES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"02:07"},{"id":"189","nome":"GABRIEL VINICIUS PACHECO DOS SANTOS","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"-16:02"},{"id":"347","nome":"GABRIEL WAGNER PEREIRA MELO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-05:20"},{"id":"297","nome":"GABRIELLE LUIZA SILVA","sup":"LUANA LARISSA DE OLIVEIRA CARDOZO","cargo":"AUXILIAR ADMINISTRATIVO","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"13:45"},{"id":"21","nome":"GERALDO LEANDRO DA SILVA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-02:55"},{"id":"440","nome":"GILBERT OLIVEIRA LIMA","sup":"VICTOR FERNANDO CARDOZO","cargo":"ASSISTENTE DE SERVIÇOS I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"06:52"},{"id":"8","nome":"GILMAR RODRIGUES CARDOSO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"TÉCNICO ELETRICISTA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"01:20"},{"id":"75","nome":"GIOVANNE DA SOLEDADE","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA II","hor":"4X4 LETRA B - (LAMEGO)","emp":"ENGENHARIA","saldo":"06:49"},{"id":"389","nome":"GLADSNEY ERLON DOS ANJOS","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"20:12"},{"id":"159","nome":"GLAYCON FERNANDO NOGUEIRA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-28:19"},{"id":"286","nome":"GUILHERME RAMOS LIMA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-01:23"},{"id":"18","nome":"GUSTAVO CARLOS DE PAULA SILVA","sup":"FERNANDO ANTONIO CARDOZO","cargo":"ASSISTENTE DE SERVIÇOS IV","hor":"ADM 07:00 AS 17:00","emp":"ENGENHARIA","saldo":"66:00"},{"id":"429","nome":"GUSTAVO HENRIQUE QUARESMA ROCHA BATISTA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"00:26"},{"id":"402","nome":"HAVINER PAIXAO DE SENA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:58"},{"id":"346","nome":"HENRIQUE FERREIRA DA SILVA FERNANDES","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA MONTADOR","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"10:43"},{"id":"415","nome":"HERIVELTON HENRIQUE FERREIRA DA SILVA","sup":"FABIANO JOSE GOMES","cargo":"TÉCNICO ELETRICISTA I","hor":"HORÁRIO CDS 07:35–14:25 | (Sex, Sab, Sex, Sab)","emp":"ENGENHARIA","saldo":"-06:15"},{"id":"384","nome":"HUGO VINICIUS CRUZ OLIVEIRA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"OPERADOR DE EQUIPAMENTOS LEVES I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-10:09"},{"id":"443","nome":"HUITALON VITORIO SOARES MAURO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"01:32"},{"id":"405","nome":"IGOR AUGUSTO DE SOUZA CIPRIANO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"00:43"},{"id":"64","nome":"IGOR AVENDANHA","sup":"PAULO SOUSA DE BRITO","cargo":"OPERADOR DE EQUIPAMENTOS II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-27:48"},{"id":"331","nome":"IGOR HENRIQUE GERALDO DIAS ROCHA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-02:37"},{"id":"418","nome":"ITALO CARRION NUNES","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"00:14"},{"id":"359","nome":"JANAINA CRISTINA COPERTINO DOS SANTOS","sup":"SANDRA MARIA SOUZA JULIO","cargo":"VENDEDORA","hor":"LOJA - 08:00 as 18:00","emp":"LOJA","saldo":"37:07"},{"id":"171","nome":"JEFERSON BRAIAN DE OLIVEIRA ASSIS","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 - EQ 2 B/D (08:00 A 18:50-CUIABA)","emp":"ENGENHARIA","saldo":"-00:52"},{"id":"47","nome":"JEFERSON GOMES DE ALMEIDA GUILHERME","sup":"VICTOR FERNANDO CARDOZO","cargo":"SUPERVISOR DE INFRAESTRUTURA II","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"14:49"},{"id":"229","nome":"JEFFERSON HENRIQUE DE OLIVEIRA SILVA","sup":"PAULO SOUSA DE BRITO","cargo":"OPERADOR DE EQUIPAMENTOS II","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"08:31"},{"id":"179","nome":"JESSICA RAMALHO DE PAULA GERMANO","sup":"SANDRA MARIA SOUZA JULIO","cargo":"VENDEDORA","hor":"LOJA  - 09:00 as 18:00","emp":"LOJA","saldo":"35:44"},{"id":"106","nome":"JOAO BATISTA DE SOUZA","sup":"FERNANDO ANTONIO CARDOZO","cargo":"MECANICO V","hor":"ADM 08:00 AS 18:00","emp":"ENGENHARIA","saldo":"-00:59"},{"id":"353","nome":"JOAO LUCAS DE ARAUJO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"00:42"},{"id":"422","nome":"JOAO PAULO DA COSTA BRAGA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-00:14"},{"id":"282","nome":"JOAO VITOR LEITE LUZ","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"11:33"},{"id":"403","nome":"JOAO VITOR TIAGO DOS SANTOS","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:58"},{"id":"319","nome":"JOAO WELLINGTON FREITAS DE AZEVEDO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"00:55"},{"id":"298","nome":"JONATHAN RODRIGUES DE OLIVEIRA","sup":"LUANA LARISSA DE OLIVEIRA CARDOZO","cargo":"AUXILIAR ADMINISTRATIVO","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"HOLDING","saldo":"09:21"},{"id":"221","nome":"JORGE FELIPE NEVES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-05:23"},{"id":"338","nome":"JOSE PEREIRA DA CRUZ FILHO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-18:59"},{"id":"333","nome":"JOSEVALDO FELIPE DA SILVA","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:08"},{"id":"263","nome":"JUAREZ SILVA FERREIRA","sup":"VICTOR FERNANDO CARDOZO","cargo":"ENGENHEIRO DE SEGRANÇA DO TRABALHO","hor":"HORARIO ENGENHEIRO (07:00 AS 11:00)","emp":"ENGENHARIA","saldo":"04:41"},{"id":"432","nome":"JULIANA CRISTINA DE SOUZA","sup":"JUAREZ SILVA FERREIRA","cargo":"TÉC SEGURANÇA DO TRABALHO III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"00:59"},{"id":"266","nome":"JUNIO HENRIQUE DOS SANTOS","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-10:13"},{"id":"255","nome":"JUNIO HENRIQUE DOS SANTOS AFONSO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-05:28"},{"id":"198","nome":"JUNIOR ALEX DE JESUS","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-19:40"},{"id":"90","nome":"KAUAN LUCK SILVA BORGES","sup":"JUAREZ SILVA FERREIRA","cargo":"ASSISTENTE ADMINISTRATIVO IV","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"40:08"},{"id":"371","nome":"KEVIN COSTNER MACHADO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-12:01"},{"id":"410","nome":"LEONARDO HENRIQUE FERNANDES COUTINHO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ENCARREGADO DE INFRAESTRUTURA II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"01:05"},{"id":"393","nome":"LEONARDO MARTINS DE ANDRADE","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-15:57"},{"id":"372","nome":"LILIANE DANIELE FERREIRA","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR ADMINISTRATIVO","hor":"ADM 4X4 07:00 AS 19:00 (CUIABA)","emp":"ENGENHARIA","saldo":"02:57"},{"id":"358","nome":"LOURENCO GOMES XAVIER JUNIOR","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-09:26"},{"id":"424","nome":"LUAN FELIPE ALVES DUTRA","sup":"FABIANO JOSE GOMES","cargo":"ELETRICISTA I","hor":"HORÁRIO CDS 07:35–14:25 | (Sab, Sex, Sab, Sex)","emp":"ENGENHARIA","saldo":"-01:28"},{"id":"400","nome":"LUCAS ANGELO SILVA SAMANEZ","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA MONTADOR","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"10:21"},{"id":"351","nome":"LUCAS GABRIEL ROSA SALEME","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-01:58"},{"id":"324","nome":"LUCAS OTAVIO SILVA MORAES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"-32:05"},{"id":"390","nome":"LUCIANO CAMPOS DE OLIVEIRA","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-19:56"},{"id":"326","nome":"LUCIANO PAULO ARCANJO DA SILVA","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"05:55"},{"id":"259","nome":"LUIZ  FERNANDO DE MOURA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"00:00"},{"id":"406","nome":"LUIZ AUGUSTO RAIMUNDO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-08:09"},{"id":"156","nome":"LUIZ GUSTAVO DOS SANTOS CALADO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 - EQ 2 B/D (08:00 A 18:50-CUIABA)","emp":"ENGENHARIA","saldo":"-03:04"},{"id":"130","nome":"MARCELINO BARTOLOMEU CARLOS","sup":"FABIANO JOSE GOMES","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"HORÁRIO CDS 07:35–14:25 | (Sab, Sex, Sab, Sex)","emp":"ENGENHARIA","saldo":"02:28"},{"id":"397","nome":"MARCELO SILVA MACIEL","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"01:24"},{"id":"362","nome":"MARCO AURELIO BARBOSA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA MONTADOR","hor":"4X4 - EQ 2 B/D (08:00 A 18:50-CUIABA)","emp":"ENGENHARIA","saldo":"07:49"},{"id":"315","nome":"MARCOS VINICIUS FERREIRA PEREIRA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"SOLDADOR MONTADOR I","hor":"ADM Subsolo -  07:10 AS 15:12 (LAMEGO)","emp":"ENGENHARIA","saldo":"-17:27"},{"id":"421","nome":"MARCOS VINICIUS VIEIRA SILVA","sup":"FERNANDO ANTONIO CARDOZO","cargo":"AUXILIAR DE MECANICO","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"19:35"},{"id":"175","nome":"MARLON VICENTE SILVA DIAS","sup":"FERNANDO ANTONIO CARDOZO","cargo":"ELETRICISTA III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-60:46"},{"id":"273","nome":"MATEUS DE SOUSA FRANCISCO","sup":"LUANA LARISSA DE OLIVEIRA CARDOZO","cargo":"ASSISTENTE ADMINISTRATIVO I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"75:26"},{"id":"437","nome":"MATHEUS VITOR GABRIEL","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-04:51"},{"id":"401","nome":"MEDRIELLY ALICE DIAS ROCHA","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR ADMINISTRATIVO I","hor":"ADM 4X4 07:00 AS 19:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-00:59"},{"id":"145","nome":"MICHAEL JOHNNY DA FONSECA OLIVEIRA","sup":"VICTOR FERNANDO CARDOZO","cargo":"COMPRADOR PLENO","hor":"ADM 08:00 AS 18:00.","emp":"HOLDING","saldo":"18:08"},{"id":"340","nome":"MICHELL LOPES DA SILVA JUNIOR","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE LIMPEZA INDUSTRIAL I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-01:43"},{"id":"411","nome":"MOKLY OLIVEIRA REIS","sup":"FABIANO JOSE GOMES","cargo":"TÉCNICO ELETRICISTA II","hor":"HORÁRIO CDS 07:35–14:25 | (Sex, Sab, Sex, Sab)","emp":"ENGENHARIA","saldo":"03:17"},{"id":"250","nome":"NARMILLEN CHANIETTO ROCHA RODRIGUES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"TÉCNICO ELETRICISTA IV","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"-119:45"},{"id":"427","nome":"NATHAN GUSTAVO SENA BATISTA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"00:03"},{"id":"114","nome":"NEYMAR DA CONCEÇÃO SILVA","sup":"PAULO SOUSA DE BRITO","cargo":"OPERADOR DE EQUIPAMENTOS I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"19:32"},{"id":"370","nome":"PABLO EQUITON DOS SANTOS BOMFIM","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA I","hor":"4X4 LETRA B - (LAMEGO)","emp":"ENGENHARIA","saldo":"-10:35"},{"id":"317","nome":"PAULO AUGUSTO LAGE","sup":"JUAREZ SILVA FERREIRA","cargo":"TÉC SEGURANÇA DO TRABALHO III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-01:45"},{"id":"412","nome":"PAULO HENRIQUE LAGARES SANTOS","sup":"FABIANO JOSE GOMES","cargo":"OPER MAQUINAS E EQUIPAMENOS III","hor":"HORÁRIO CDS 07:35–14:25 | (Sex, Sab, Sex, Sab)","emp":"ENGENHARIA","saldo":"03:35"},{"id":"174","nome":"PAULO RODRIGUES BRANDÃO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA FORÇA CONTROLE","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-06:24"},{"id":"2","nome":"PAULO SOUSA DE BRITO","sup":"VICTOR FERNANDO CARDOZO","cargo":"SUPERVISOR DE INFRAESTRUTURA II","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"86:58"},{"id":"334","nome":"PEDRO HENRIQUE CASSIMIRO DE SOUZA COTI","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"01:16"},{"id":"423","nome":"PEDRO HENRIQUE DE ALMEIDA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA MONTADOR","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"00:00"},{"id":"13","nome":"PEDRO SILVA DE DEUS","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR III","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"05:19"},{"id":"435","nome":"PHILIPE AUGUSTO SOUZA GABRIEL","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-01:35"},{"id":"327","nome":"PRESLEY ROSARIO DA CONCEIÇÃO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-09:49"},{"id":"442","nome":"RAI PERCILIANO SANTOS","sup":"GABRIEL DE SOUZA BRAGA","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"00:00"},{"id":"332","nome":"RAQUEL LINO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:30"},{"id":"321","nome":"RENAN HENRIQUE DA SILVA OLIVEIRA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"01:12"},{"id":"160","nome":"RICARDO LUIS GUERRA DA COSTA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-07:52"},{"id":"204","nome":"RICARDO RODRIGUES FERREIRA","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENOS III","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-34:11"},{"id":"257","nome":"RICLEI MARQUES SILVA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 - EQ 2 B/D (08:00 A 18:50-CUIABA)","emp":"ENGENHARIA","saldo":"-22:36"},{"id":"6","nome":"RODRIGO ANTONIO DO NASCIMENTO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA FORÇA CONTROLE","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-16:47"},{"id":"99","nome":"RODRIGO DA SILVA SOUSA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"TÉCNICO ELETRICISTA II","hor":"4X4 - EQ 2 B/D (08:00 A 18:50-CUIABA)","emp":"ENGENHARIA","saldo":"-00:45"},{"id":"431","nome":"ROMEU HENRIQUE MARTINS DA CRUZ","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:22"},{"id":"413","nome":"RONILDO GABRIEL SIQUEIRA","sup":"FABIANO JOSE GOMES","cargo":"AUXILIAR DE INFRAESTRUTURA III","hor":"HORÁRIO CDS 07:35–14:25 | (Sab, Sex, Sab, Sex)","emp":"ENGENHARIA","saldo":"02:26"},{"id":"446","nome":"SAMUEL SOUZA REIS","sup":"JUAREZ SILVA FERREIRA","cargo":"TÉC SEGURANÇA DO TRABALHO III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"00:37"},{"id":"200","nome":"SAMUELL IGOR SANTOS SOUZA","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-56:18"},{"id":"123","nome":"SANDRA MARIA SOUZA JULIO","sup":"MARCELO AUGUSTO CARDOZO","cargo":"SUPERVISORA DE LOJA","hor":"LOJA - 08:00 as 17:00","emp":"LOJA","saldo":"03:59"},{"id":"3","nome":"SIDNEI DA SILVA GOMES","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-16:33"},{"id":"310","nome":"SORAIA MORAES GONÇALVES","sup":"SANDRA MARIA SOUZA JULIO","cargo":"VENDEDORA","hor":"LOJA - 08:00 as 17:00","emp":"LOJA","saldo":"50:01"},{"id":"434","nome":"THIAGO RIAN DE LIMA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 -EQ 2 (LAMEGO T1)","emp":"ENGENHARIA","saldo":"00:55"},{"id":"81","nome":"THOMÁS AURÉLIO SILVA NEVES","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-31:33"},{"id":"355","nome":"THYAGO AUGUSTO NAZARE DA SILVA","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-06:46"},{"id":"445","nome":"VITOR DAMASIO DA COSTA","sup":"","cargo":"AUXILIAR DE LOJA","hor":"LOJA - 08:00 as 18:00","emp":"LOJA","saldo":"-01:10"},{"id":"439","nome":"VOLTAIRE PAYOUTTE","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA II","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-12:07"},{"id":"7","nome":"WALERSON FERNANDES DA CRUZ SANTOS","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA FORÇA CONTROLE","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-30:11"},{"id":"237","nome":"WANDER LUCIO DE OLIVEIRA JUNIOR","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA MONTADOR","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"00:12"},{"id":"399","nome":"WANDERSON CELESTE DIAS DE AMORIM","sup":"PAULO SOUSA DE BRITO","cargo":"OPER MAQUINAS E EQUIPAMENTOS II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"00:00"},{"id":"285","nome":"WANDERSON DO CARMO SILVA MARÇAL","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-11:25"},{"id":"396","nome":"WANDERSON TELES VITORINO PASSOS","sup":"FERNANDO ANTONIO CARDOZO","cargo":"MECANICO II","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"18:33"},{"id":"387","nome":"WARLEI LUCAS DOS SANTOS VIANA","sup":"GABRIEL DE SOUZA BRAGA","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 - EQ 1(LAMEGO T1)","emp":"ENGENHARIA","saldo":"00:41"},{"id":"153","nome":"WARLEY DOS SANTOS SERAFIM","sup":"PAULO SOUSA DE BRITO","cargo":"SOLDADOR MONTADOR II","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-13:33"},{"id":"277","nome":"WASHINGTON ADRIANO DE OLIVEIRA SANTOS","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-10:24"},{"id":"322","nome":"WELINGTON AUGUSTO DIAS","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"08:08"},{"id":"79","nome":"WELISSON ROBERTO MARTINS LEITE","sup":"JUAREZ SILVA FERREIRA","cargo":"TÉC SEGURANÇA DO TRABALHO III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-03:50"},{"id":"335","nome":"WELLINGTON FERNANDES ROCHA DOS SANTOS","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE LIMPEZA INDUSTRIAL I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-13:57"},{"id":"48","nome":"WENDRELL LEONE ALMEIDA CARVALHO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"TÉCNICO ELETRICISTA I","hor":"4X4 - EQ 1 A/C  (08:00 A 18:50 - CUIABA)","emp":"ENGENHARIA","saldo":"03:32"},{"id":"311","nome":"WESLEY DA SILVA MONTEIRO","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"ELETRICISTA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-11:39"},{"id":"314","nome":"WESLEY MEYER DOS SANTOS RIBEIRO","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"-02:00"},{"id":"416","nome":"WESLEY NUNES RIBEIRO","sup":"FABIANO JOSE GOMES","cargo":"OPER MAQUINAS E EQUIPAMENOS III","hor":"HORÁRIO CDS 07:35–14:25 | (Sab, Sex, Sab, Sex)","emp":"ENGENHARIA","saldo":"-00:02"},{"id":"262","nome":"WESLEY ROMUALDO DE SOUZA","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"MANTENEDOR ELETRICO I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"-16:39"},{"id":"161","nome":"WEVERTON JOHNNY CAETANO DA SILVA","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA II","hor":"4X4 LETRA B (CUIABA)","emp":"ENGENHARIA","saldo":"07:19"},{"id":"28","nome":"WEVILEY BRUNO DA SILVA BORGES","sup":"PAULO SOUSA DE BRITO","cargo":"ENCARREGADO DE INFRAESTRUTURA l","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"-06:00"},{"id":"376","nome":"WILLER ALEME NEPOMUCENO","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA A (CUIABA)","emp":"ENGENHARIA","saldo":"04:14"},{"id":"436","nome":"WILSON DE SOUZA JUNIOR","sup":"JEFERSON GOMES DE ALMEIDA GUILHERME","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA D (CUIABA)","emp":"ENGENHARIA","saldo":"-02:07"},{"id":"193","nome":"WILSON PEREIRA FERNANDES","sup":"GABRIEL DE SOUZA BRAGA","cargo":"ELETRICISTA III","hor":"ADM   07:00 AS 17:00 (CUIABA)","emp":"ENGENHARIA","saldo":"-54:16"},{"id":"391","nome":"YAGO CHILAVERTH BRASILEIRO GONÇALVES","sup":"PAULO SOUSA DE BRITO","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 LETRA C (CUIABA)","emp":"ENGENHARIA","saldo":"00:22"},{"id":"375","nome":"YURI DE PAULA GOMES","sup":"GABRIEL DE SOUZA BRAGA","cargo":"AUXILIAR DE INFRAESTRUTURA I","hor":"4X4 -EQ 2 (LAMEGO T1)","emp":"ENGENHARIA","saldo":"02:36"}]</script>
+<script type="application/json" id="jornadas-data">{"4x4":650,"ADM":540,"ADM Subsolo":480,"CDS":480,"Loja":540,"ADM 4x4":720,"Especial":240,"Outros":540}</script>
+<script>
+const EDIT = new URLSearchParams(location.search).get("edit")==="1";
+if(EDIT) document.body.classList.add("edit");
+const PRISTINE = "<!DOCTYPE html>\n"+document.documentElement.outerHTML;
+const RAW = JSON.parse(document.getElementById("base-data").textContent);
+const JSAVED = JSON.parse(document.getElementById("jornadas-data").textContent||"{}");
+const GROUPS = [
+  {k:"4x4", label:"4x4", def:650, ex:"4X4 Letra A/B/C/D, EQ 1/EQ 2"},
+  {k:"ADM", label:"ADM", def:540, ex:"ADM 07:00 às 17:00, 08:00 às 18:00, Serviços Gerais"},
+  {k:"ADM Subsolo", label:"ADM Subsolo", def:480, ex:"ADM Subsolo 07:10 às 15:12 (Lamego)"},
+  {k:"CDS", label:"CDS", def:480, ex:"Horário CDS 07:35–14:25"},
+  {k:"Loja", label:"Loja", def:540, ex:"Loja 08:00 às 18:00 / 17:00 / 09:00 às 18:00, horário Cristiano", premise:true},
+  {k:"ADM 4x4", label:"ADM 4x4", def:650, ex:"ADM 4X4 07:00 às 19:00 (Cuiabá)", premise:true},
+  {k:"Especial", label:"Horário especial", def:240, ex:"Horário engenheiro 07:00 às 11:00", premise:true},
+  {k:"Outros", label:"Outros", def:540, ex:"Qualquer horário não reconhecido", premise:true}
+];
+function grupo(h){
+  const u=(h||"").toUpperCase();
+  if(u.includes("SUBSOLO")) return "ADM Subsolo";
+  if(u.includes("CDS")) return "CDS";
+  if(u.includes("ENGENHEIRO")) return "Especial";
+  if(u.includes("LOJA")) return "Loja";
+  if(u.includes("4X4") && u.trim().startsWith("ADM")) return "ADM 4x4";
+  if(u.includes("4X4")) return "4x4";
+  if(u.includes("ADM")) return "ADM";
+  return "Outros";
+}
+let J={}; GROUPS.forEach(g=>J[g.k]=g.def); Object.assign(J,JSAVED);
+let rows=RAW.map(r=>Array.isArray(r)?{id:r[0],nome:r[1],sup:r[2],cargo:r[3],hor:r[4],emp:r[5],saldo:r[6]}:r);
+if(EDIT){
+  try{const s=JSON.parse(localStorage.getItem("bh_jornadas")||"null"); if(s) Object.assign(J,s);}catch(e){}
+  try{const b=JSON.parse(localStorage.getItem("bh_base")||"null"); if(b&&b.rows) rows=b.rows;}catch(e){}
+}
+
+function toMin(v){
+  if(v==null||v==="") return 0;
+  if(typeof v==="number") return Math.round(v*1440);
+  const s=String(v).trim(); const neg=s.startsWith("-");
+  const p=s.replace(/^[-+]/,"").split(":"); const m=(parseInt(p[0])||0)*60+(parseInt(p[1])||0);
+  return neg?-m:m;
+}
+function hm(m){const a=Math.abs(m);return (m<0?"−":m>0?"+":"")+Math.floor(a/60)+":"+String(a%60).padStart(2,"0");}
+function hmPlain(m){const a=Math.abs(m);const h=Math.floor(a/60),mi=a%60;return h?(h+"h"+(mi?String(mi).padStart(2,"0"):"")):(mi+"min");}
+const tc=s=>(s||"").toLowerCase().replace(/(^|\s)(\S)/g,(a,b,c)=>b+c.toUpperCase()).replace(/\b(De|Da|Do|Dos|Das|E)\b/g,w=>w.toLowerCase()).replace(/\b(Ii|Iii|Iv|Vi|Vii)\b/g,w=>w.toUpperCase());
+function shortName(s){if(!s) return "Sem supervisor";const p=tc(s).split(" ").filter(w=>!["de","da","do","dos","das","e"].includes(w));return p.length>1?p[0]+" "+p[p.length-1]:p[0];}
+
+function calc(r){
+  const m=toMin(r.saldo), g=grupo(r.hor), j=J[g]||540;
+  const a=Math.abs(m), d=Math.floor(a/j), rest=a-d*j;
+  let sit="ok";
+  if(a>=60) sit = a<j ? (m<0?"hneg":"hpos") : (m<0?"work":"off");
+  return {...r, m, g, j, d, rest, dec:a/j, sit, supKey:r.sup||"SEM SUPERVISOR"};
+}
+let data=[];
+function rebuild(){data=rows.map(calc);}
+rebuild();
+
+let state={sup:"", esc:"", sit:"", q:"", sort:"neg"};
+
+function renderSups(){
+  const box=document.getElementById("sups");
+  const map={};
+  data.forEach(r=>{(map[r.supKey]=map[r.supKey]||[]).push(r);});
+  const keys=Object.keys(map).sort((a,b)=>map[b].length-map[a].length);
+  const chip=(key,label,list)=>{
+    const w=list.filter(r=>r.sit==="work").length, o=list.filter(r=>r.sit==="off").length;
+    return `<button type="button" class="sup" data-sup="${key}" aria-pressed="${state.sup===key}"><span class="n">${label}</span><span class="c">${list.length} pessoas · ${w} trabalhar · ${o} folgar</span></button>`;
+  };
+  box.innerHTML=chip("","Todos",data)+keys.map(k=>chip(k,k==="SEM SUPERVISOR"?"Sem supervisor":shortName(k),map[k])).join("");
+  box.querySelectorAll(".sup").forEach(b=>b.onclick=()=>{state.sup=b.dataset.sup;render();});
+}
+function renderEsc(){
+  const sel=document.getElementById("fEsc"); const cur=sel.value;
+  const gs=[...new Set(data.map(r=>r.g))];
+  sel.innerHTML='<option value="">Todas as escalas</option>'+GROUPS.filter(g=>gs.includes(g.k)).map(g=>`<option value="${g.k}">${g.label}</option>`).join("");
+  sel.value=cur;
+}
+function fmtDays(n){return n.toLocaleString("pt-BR",{maximumFractionDigits:1});}
+
+function render(){
+  renderSups();
+  const bySup=data.filter(r=>!state.sup||r.supKey===state.sup);
+  // balança (considera supervisor + escala + busca, não a situação)
+  const base=bySup.filter(r=>(!state.esc||r.g===state.esc)&&match(r));
+  const W=base.filter(r=>r.sit==="work"), O=base.filter(r=>r.sit==="off"), M=base.filter(r=>["hneg","hpos","ok"].includes(r.sit));
+  const wd=W.reduce((s,r)=>s+r.d,0), od=O.reduce((s,r)=>s+r.d,0);
+  const supLabel=state.sup?(state.sup==="SEM SUPERVISOR"?"Sem supervisor":tc(state.sup)):"Toda a equipe";
+  document.getElementById("scaleTitle").textContent=supLabel+" · "+base.length+" colaboradores";
+  document.getElementById("printSup").textContent=supLabel;
+  document.getElementById("wDays").textContent=wd;
+  document.getElementById("oDays").textContent=od;
+  document.getElementById("wDet").textContent=W.length+(W.length===1?" pessoa com saldo negativo":" pessoas com saldo negativo");
+  document.getElementById("oDet").textContent=O.length+(O.length===1?" pessoa com saldo positivo":" pessoas com saldo positivo");
+  document.getElementById("mCount").textContent=M.length;
+  const neg=base.filter(r=>r.m<0).reduce((s,r)=>s-r.m,0), pos=base.filter(r=>r.m>0).reduce((s,r)=>s+r.m,0), mx=Math.max(neg,pos,1);
+  document.getElementById("bL").style.width=(neg/mx*100)+"%";
+  document.getElementById("bR").style.width=(pos/mx*100)+"%";
+  document.querySelectorAll(".side").forEach(b=>b.setAttribute("aria-pressed",state.sit===b.dataset.sit));
+
+  let list=base.filter(r=>!state.sit||r.sit===state.sit);
+  if(state.sort==="neg") list.sort((a,b)=>a.m-b.m);
+  else if(state.sort==="pos") list.sort((a,b)=>b.m-a.m);
+  else list.sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR"));
+  const scale=Math.max(1,...list.map(r=>Math.abs(r.m)));
+  document.getElementById("count").textContent=list.length+" de "+bySup.length+" colaboradores";
+  const tb=document.getElementById("tb");
+  if(!list.length){tb.innerHTML='<tr><td colspan="7" class="empty">Nenhum colaborador com esses filtros. Limpe a busca ou escolha outra situação.</td></tr>';return;}
+  tb.innerHTML=list.map(r=>{
+    const cls=r.m>0?"pos":r.m<0?"neg":"zer";
+    const eq = r.d>0 ? `${r.d} ${r.d===1?"dia":"dias"}${r.rest?` <span class="hint">+ ${hmPlain(r.rest)}</span>`:""}` : (Math.abs(r.m)?hmPlain(Math.abs(r.m)):"—");
+    let act;
+    if(r.sit==="work") act=`<span class="tag work">Trabalhar ${r.d} ${r.d===1?"dia":"dias"}</span>${r.rest>=60?`<span class="hint">e compensar ${hmPlain(r.rest)} em horas</span>`:""}`;
+    else if(r.sit==="off") act=`<span class="tag off">Folgar ${r.d} ${r.d===1?"dia":"dias"}</span>${r.rest>=60?`<span class="hint">e ${hmPlain(r.rest)} em saída antecipada</span>`:""}`;
+    else if(r.sit==="hneg") act=`<span class="tag hrs">Devendo menos de um dia</span><span class="hint">saldo de ${hmPlain(Math.abs(r.m))}</span>`;
+    else if(r.sit==="hpos") act=`<span class="tag hrs">Crédito de menos de um dia</span><span class="hint">saldo de ${hmPlain(Math.abs(r.m))}</span>`;
+    else act=`<span class="tag ok">Em dia</span>`;
+    const w=Math.abs(r.m)/scale*100;
+    return `<tr>
+      <td class="c-name"><div class="name">${tc(r.nome)}</div><div class="role">${tc(r.cargo)}${!state.sup?` · ${shortName(r.sup)}`:""}</div></td>
+      <td class="c-esc esc">${GROUPS.find(g=>g.k===r.g).label}<small>1 dia = ${hmPlain(r.j)}</small></td>
+      <td class="c-saldo r"><span class="saldo num ${cls}">${hm(r.m)}</span></td>
+      <td class="c-dias r num" style="font-size:1.05rem">${eq}</td>
+      <td class="c-bar"><div class="bar" aria-hidden="true"><div class="l"><span style="width:${r.m<0?w:0}%"></span></div><div class="r"><span style="width:${r.m>0?w:0}%"></span></div></div></td>
+      <td class="c-acao">${act}</td>
+      <td class="decision"></td>
+    </tr>`;}).join("");
+}
+function match(r){if(!state.q) return true;const q=state.q.toLowerCase();return r.nome.toLowerCase().includes(q)||(r.cargo||"").toLowerCase().includes(q);}
+
+function renderRules(){
+  const gs=new Set(data.map(r=>r.g));
+  document.getElementById("jgrid").innerHTML=GROUPS.filter(g=>gs.has(g.k)).map(g=>{
+    const n=data.filter(r=>r.g===g.k).length;
+    return `<div class="jitem ${g.premise?"premise":""}"><label for="j_${g.k}">${g.label} <span class="num" style="color:var(--muted);font-weight:500">(${n})</span></label>
+    <span class="ex">${g.ex}</span>${g.premise?'<span class="flag">Valor provisório, confirmar</span><br>':""}
+    <input id="j_${g.k}" data-k="${g.k}" value="${Math.floor(J[g.k]/60)}:${String(J[g.k]%60).padStart(2,"0")}" inputmode="numeric" aria-label="Horas de um dia na escala ${g.label}"></div>`;}).join("");
+  document.querySelectorAll("#jgrid input").forEach(i=>i.onchange=()=>{
+    const m=Math.abs(toMin(i.value)); if(m<30){i.value=`${Math.floor(J[i.dataset.k]/60)}:${String(J[i.dataset.k]%60).padStart(2,"0")}`;return;}
+    J[i.dataset.k]=m; try{localStorage.setItem("bh_jornadas",JSON.stringify(J));}catch(e){}
+    i.value=`${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}`;
+    rebuild(); render();
+  });
+}
+
+document.getElementById("q").oninput=e=>{state.q=e.target.value;render();};
+document.getElementById("fEsc").onchange=e=>{state.esc=e.target.value;render();};
+document.getElementById("fSit").onchange=e=>{state.sit=e.target.value;render();};
+document.getElementById("fSort").onchange=e=>{state.sort=e.target.value;render();};
+document.querySelectorAll(".side").forEach(b=>b.onclick=()=>{state.sit=state.sit===b.dataset.sit?"":b.dataset.sit;document.getElementById("fSit").value=state.sit;render();});
+document.getElementById("btnPrint").onclick=gerarPDF;
+document.getElementById("btnHtml").onclick=baixarHTML;
+
+let dlPromise=null;
+function getDownloads(){
+  if(!window.claude||!window.claude.use) return Promise.resolve(null);
+  if(!dlPromise) dlPromise=window.claude.use("downloads").catch(()=>null);
+  return dlPromise;
+}
+async function entregar(filename, blob){
+  const dl=await getDownloads();
+  if(dl){
+    try{await dl.save({filename,data:blob});}
+    catch(e){ if(e&&e.code!=="declined") alert("Não foi possível salvar o arquivo aqui ("+(e.code||"erro")+")."); }
+    return;
+  }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+function slug(s){return (s||"todos").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");}
+
+function currentList(){
+  const base=data.filter(r=>(!state.sup||r.supKey===state.sup)&&(!state.esc||r.g===state.esc)&&match(r)&&(!state.sit||r.sit===state.sit));
+  const l=[...base];
+  if(state.sort==="neg") l.sort((a,b)=>a.m-b.m); else if(state.sort==="pos") l.sort((a,b)=>b.m-a.m); else l.sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR"));
+  return l;
+}
+function acaoTxt(r){
+  if(r.sit==="work") return "Trabalhar "+r.d+(r.d===1?" dia":" dias")+(r.rest>=60?" (+ "+hmPlain(r.rest)+" em horas)":"");
+  if(r.sit==="off") return "Folgar "+r.d+(r.d===1?" dia":" dias")+(r.rest>=60?" (+ "+hmPlain(r.rest)+" em horas)":"");
+  if(r.sit==="hneg") return "Devendo menos de um dia";
+  if(r.sit==="hpos") return "Crédito de menos de um dia";
+  return "Em dia";
+}
+async function gerarPDF(){
+  if(!window.jspdf){alert("O gerador de PDF ainda não carregou. Aguarde alguns segundos e tente de novo.");return;}
+  const btn=document.getElementById("btnPrint"); btn.disabled=true; const old=btn.textContent; btn.textContent="Gerando PDF…";
+  try{
+    const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+    const W=doc.internal.pageSize.getWidth();
+    const list=currentList();
+    const supLabel=state.sup?(state.sup==="SEM SUPERVISOR"?"Sem supervisor":tc(state.sup)):"Toda a equipe";
+    const img=document.querySelector(".logo");
+    doc.addImage(img.src,"PNG",14,10,46,12);
+    doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(24,33,44);
+    doc.text("Gestão de Banco de Horas e Compensações",W-14,15,{align:"right"});
+    doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(84,88,91);
+    doc.text("Supervisor: "+supLabel+"     Data da reunião: ____/____/______",W-14,21,{align:"right"});
+    doc.setDrawColor(21,81,167); doc.setLineWidth(.8); doc.line(14,26,W-14,26);
+    const W1=list.filter(r=>r.sit==="work"), O1=list.filter(r=>r.sit==="off"), M1=list.length-W1.length-O1.length;
+    const wd=W1.reduce((s,r)=>s+r.d,0), od=O1.reduce((s,r)=>s+r.d,0);
+    doc.setFontSize(10.5); doc.setFont("helvetica","bold");
+    doc.setTextColor(180,96,26); doc.text(wd+" dias a trabalhar ("+W1.length+" pessoas)",14,33);
+    doc.setTextColor(21,81,167); doc.text(od+" dias a folgar ("+O1.length+" pessoas)",W/2,33,{align:"center"});
+    doc.setTextColor(84,88,91); doc.text(M1+" com menos de um dia ou em dia",W-14,33,{align:"right"});
+    doc.autoTable({
+      startY:37,
+      head:[["Colaborador","Cargo","Escala","Saldo","Equivale a","Tratativa sugerida","Definição do supervisor (datas)"]],
+      body:list.map(r=>[tc(r.nome),tc(r.cargo),GROUPS.find(g=>g.k===r.g).label+" ("+hmPlain(r.j)+"/dia)",hm(r.m).replace("−","-"),
+        r.d>0?(r.d+(r.d===1?" dia":" dias")+(r.rest?" + "+hmPlain(r.rest):"")):(Math.abs(r.m)?hmPlain(Math.abs(r.m)):"-"),acaoTxt(r),""]),
+      styles:{font:"helvetica",fontSize:8.5,cellPadding:2.2,valign:"middle",lineColor:[220,224,229],lineWidth:.1},
+      headStyles:{fillColor:[21,81,167],textColor:255,fontStyle:"bold"},
+      alternateRowStyles:{fillColor:[246,247,249]},
+      columnStyles:{0:{cellWidth:52,fontStyle:"bold"},1:{cellWidth:42},2:{cellWidth:28},3:{cellWidth:18,halign:"right"},4:{cellWidth:26,halign:"right"},5:{cellWidth:44},6:{cellWidth:"auto"}},
+      didParseCell:d=>{ if(d.section==="body"&&(d.column.index===3||d.column.index===5)){const r=list[d.row.index]; if(r.m<0&&r.sit!=="ok") d.cell.styles.textColor=[180,96,26]; else if(r.m>0&&r.sit!=="ok") d.cell.styles.textColor=[21,81,167]; else d.cell.styles.textColor=[154,160,166];}},
+      margin:{left:14,right:14,bottom:16},
+      didDrawPage:()=>{const H=doc.internal.pageSize.getHeight();doc.setFontSize(8);doc.setTextColor(120);doc.setFont("helvetica","normal");doc.text("Página "+doc.internal.getNumberOfPages(),W-14,H-8,{align:"right"});}
+    });
+    let y=doc.lastAutoTable.finalY+22; const H=doc.internal.pageSize.getHeight();
+    if(y>H-14){doc.addPage(); y=40;}
+    doc.setDrawColor(0); doc.setLineWidth(.3); doc.setTextColor(60);
+    doc.line(30,y,120,y); doc.line(W-120,y,W-30,y);
+    doc.setFontSize(9); doc.text("Supervisor",75,y+5,{align:"center"}); doc.text("Planejamento / Processos",W-75,y+5,{align:"center"});
+    const blob=doc.output("blob");
+    await entregar("banco_de_horas_"+slug(supLabel)+".pdf",blob);
+  }catch(e){alert("Não foi possível gerar o PDF: "+e.message);}
+  finally{btn.disabled=false; btn.textContent=old;}
+}
+async function baixarHTML(){
+  const d=new DOMParser().parseFromString(PRISTINE,"text/html");
+  d.getElementById("base-data").textContent=JSON.stringify(rows).replace(/</g,"\\u003c");
+  d.getElementById("jornadas-data").textContent=JSON.stringify(J);
+  d.body.classList.remove("edit");
+  const html="<!DOCTYPE html>\n"+d.documentElement.outerHTML;
+  await entregar("banco_de_horas.html",new Blob([html],{type:"text/html"}));
+}
+document.getElementById("btnBase").onclick=()=>document.getElementById("fileIn").click();
+document.getElementById("fileIn").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const wb=XLSX.read(await f.arrayBuffer());
+    const ws=wb.Sheets["BASE"]||wb.Sheets[wb.SheetNames[0]];
+    const arr=XLSX.utils.sheet_to_json(ws,{defval:""});
+    const key=(o,n)=>{const k=Object.keys(o).find(k=>k.trim().toUpperCase()===n.toUpperCase());return k?o[k]:"";};
+    const nr=arr.filter(o=>key(o,"Nome")).map(o=>({id:String(key(o,"id_funcionario")),nome:String(key(o,"Nome")),sup:String(key(o,"SUPERVISOR")||""),cargo:String(key(o,"Cargo")),hor:String(key(o,"Horário de Trabalho")),emp:String(key(o,"Empresa")),saldo:key(o,"Saldo Banco")}));
+    if(!nr.length) throw new Error("sem linhas");
+    rows=nr;
+    try{localStorage.setItem("bh_base",JSON.stringify({rows}));}catch(err){}
+    rebuild(); state.sup=""; renderEsc(); renderRules(); render();
+    alert(nr.length+" colaboradores carregados. Clique em “Baixar HTML atualizado” para gerar o arquivo com a nova base.");
+  }catch(err){alert("Não foi possível ler a planilha. Confira se a aba BASE tem as colunas Nome, SUPERVISOR, Cargo, Horário de Trabalho e Saldo Banco.");}
+  e.target.value="";
+};
+renderEsc(); renderRules(); render();
+</script></body></html>
